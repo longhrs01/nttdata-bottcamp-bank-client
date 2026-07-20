@@ -1,0 +1,435 @@
+openapi: 3.0.3
+
+info:
+  title: Bank Client API
+  description: API for managing personal and business bank clients.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8081
+    description: Local development server
+
+tags:
+  - name: Clients
+    description: Operations for managing bank clients
+
+paths:
+
+  /api/v1/clients:
+    post:
+      tags:
+        - Clients
+      summary: Create a bank client
+      operationId: createClient
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateClientRequest'
+            examples:
+              personalClient:
+                summary: Personal client
+                value:
+                  clientType: PERSONAL
+                  documentType: DNI
+                  documentNumber: "71234567"
+                  firstName: Chris
+                  lastName: Vega
+                  businessName: null
+
+              businessClient:
+                summary: Business client
+                value:
+                  clientType: BUSINESS
+                  documentType: RUC
+                  documentNumber: "20123456789"
+                  firstName: null
+                  lastName: null
+                  businessName: Inversiones Vega S.A.C.
+
+      responses:
+        '201':
+          description: Client created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientResponse'
+
+        '400':
+          $ref: '#/components/responses/ValidationError'
+
+        '409':
+          $ref: '#/components/responses/DuplicateClientError'
+
+        '422':
+          $ref: '#/components/responses/BusinessRuleError'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    get:
+      tags:
+        - Clients
+      summary: Retrieve all active clients
+      operationId: findAllClients
+      responses:
+        '200':
+          description: Active clients retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ClientResponse'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/clients/{id}:
+    get:
+      tags:
+        - Clients
+      summary: Retrieve an active client by ID
+      operationId: findClientById
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+
+      responses:
+        '200':
+          description: Client retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientResponse'
+
+        '404':
+          $ref: '#/components/responses/ClientNotFoundError'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      tags:
+        - Clients
+      summary: Update an active client
+      description: >
+        Personal clients can update firstName and lastName.
+        Business clients can update businessName.
+      operationId: updateClient
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateClientRequest'
+
+            examples:
+              updatePersonalClient:
+                summary: Update personal client
+                value:
+                  firstName: Christopher
+                  lastName: Vega
+                  businessName: null
+
+              updateBusinessClient:
+                summary: Update business client
+                value:
+                  firstName: null
+                  lastName: null
+                  businessName: Nueva Razón Social S.A.C.
+
+      responses:
+        '200':
+          description: Client updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientResponse'
+
+        '400':
+          $ref: '#/components/responses/ValidationError'
+
+        '404':
+          $ref: '#/components/responses/ClientNotFoundError'
+
+        '422':
+          $ref: '#/components/responses/BusinessRuleError'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      tags:
+        - Clients
+      summary: Logically delete a client
+      description: Marks the client as inactive without physically deleting its document.
+      operationId: deleteClient
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+
+      responses:
+        '204':
+          description: Client logically deleted successfully
+
+        '404':
+          $ref: '#/components/responses/ClientNotFoundError'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/clients/document/{documentNumber}:
+    get:
+      tags:
+        - Clients
+      summary: Retrieve an active client by document number
+      operationId: findClientByDocumentNumber
+
+      parameters:
+        - name: documentNumber
+          in: path
+          required: true
+          description: Client document number
+          schema:
+            type: string
+            maxLength: 20
+          example: "71234567"
+
+      responses:
+        '200':
+          description: Client retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientResponse'
+
+        '404':
+          $ref: '#/components/responses/ClientNotFoundError'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+
+  parameters:
+    ClientId:
+      name: id
+      in: path
+      required: true
+      description: MongoDB client identifier
+      schema:
+        type: string
+      example: 68743de0c8315a79eb853f02
+
+  schemas:
+
+    ClientType:
+      type: string
+      description: Bank client classification
+      enum:
+        - PERSONAL
+        - BUSINESS
+
+    DocumentType:
+      type: string
+      description: Client identification document type
+      enum:
+        - DNI
+        - RUC
+        - PASSPORT
+
+    CreateClientRequest:
+      type: object
+      required:
+        - clientType
+        - documentType
+        - documentNumber
+
+      properties:
+        clientType:
+          $ref: '#/components/schemas/ClientType'
+
+        documentType:
+          $ref: '#/components/schemas/DocumentType'
+
+        documentNumber:
+          type: string
+          minLength: 1
+          maxLength: 20
+          example: "71234567"
+
+        firstName:
+          type: string
+          maxLength: 50
+          nullable: true
+          example: Chris
+
+        lastName:
+          type: string
+          maxLength: 40
+          nullable: true
+          example: Vega
+
+        businessName:
+          type: string
+          maxLength: 50
+          nullable: true
+          example: Inversiones Vega S.A.C.
+
+      description: |
+        Business rules:
+
+        * PERSONAL requires firstName and lastName.
+        * PERSONAL must not provide businessName.
+        * BUSINESS requires businessName.
+        * BUSINESS must not provide firstName or lastName.
+
+    UpdateClientRequest:
+      type: object
+      properties:
+        firstName:
+          type: string
+          maxLength: 50
+          nullable: true
+
+        lastName:
+          type: string
+          maxLength: 40
+          nullable: true
+
+        businessName:
+          type: string
+          maxLength: 50
+          nullable: true
+
+      minProperties: 1
+
+      description: |
+        At least one field must be provided.
+
+        * PERSONAL clients can update firstName and lastName.
+        * BUSINESS clients can update businessName.
+
+    ClientResponse:
+      type: object
+      required:
+        - id
+        - clientType
+        - documentType
+        - documentNumber
+        - displayName
+        - active
+
+      properties:
+        id:
+          type: string
+          example: 68743de0c8315a79eb853f02
+
+        clientType:
+          $ref: '#/components/schemas/ClientType'
+
+        documentType:
+          $ref: '#/components/schemas/DocumentType'
+
+        documentNumber:
+          type: string
+          example: "71234567"
+
+        displayName:
+          type: string
+          example: Chris Vega
+
+        active:
+          type: boolean
+          example: true
+
+    ErrorResponse:
+      type: object
+      required:
+        - code
+        - message
+        - timestamp
+        - path
+
+      properties:
+        code:
+          type: string
+          example: CLIENT_NOT_FOUND
+
+        message:
+          type: string
+          example: Client not found with id 68743de0c8315a79eb853f02
+
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-07-13T01:30:00Z"
+
+        path:
+          type: string
+          example: /api/v1/clients/68743de0c8315a79eb853f02
+
+  responses:
+
+    ValidationError:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: VALIDATION_ERROR
+            message: firstName must not exceed 50 characters
+            timestamp: "2026-07-13T01:30:00Z"
+            path: /api/v1/clients
+
+    ClientNotFoundError:
+      description: Client was not found or is inactive
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: CLIENT_NOT_FOUND
+            message: Client not found with id 68743de0c8315a79eb853f02
+            timestamp: "2026-07-13T01:30:00Z"
+            path: /api/v1/clients/68743de0c8315a79eb853f02
+
+    DuplicateClientError:
+      description: A client with the same document number already exists
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: CLIENT_ALREADY_EXISTS
+            message: Client already exists with document number 71234567
+            timestamp: "2026-07-13T01:30:00Z"
+            path: /api/v1/clients
+
+    BusinessRuleError:
+      description: A business rule was violated
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: BUSINESS_RULE_VIOLATION
+            message: Personal clients cannot provide a business name
+            timestamp: "2026-07-13T01:30:00Z"
+            path: /api/v1/clients
+
+    InternalServerError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: INTERNAL_SERVER_ERROR
+            message: An unexpected error occurred
+            timestamp: "2026-07-13T01:30:00Z"
+            path: /api/v1/clients

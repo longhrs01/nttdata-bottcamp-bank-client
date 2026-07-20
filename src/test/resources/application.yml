@@ -1,0 +1,16 @@
+eureka:
+  client:
+    enabled: false
+
+spring:
+  application:
+    name: bank-client
+  config:
+    import: "optional:configserver:http://localhost:8888"
+  cloud:
+    config:
+      enabled: false
+      import-check:
+        enabled: false
+    discovery:
+      enabled: false
